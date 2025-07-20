@@ -23,6 +23,17 @@
   const resultadosPorQueda = derived([resultados, totalQuedas], () => getResultadosPorQueda());
 </script>
 
+<!-- Bloco de anúncio no TOPO -->
+<div style="text-align:center; margin-bottom: 1.5rem;">
+  <ins class="adsbygoogle"
+       style="display:block"
+       data-ad-client="ca-pub-XXXXXXXXXXXXXXX"
+       data-ad-slot="1234567890"
+       data-ad-format="auto"
+       data-full-width-responsive="true"></ins>
+  <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+</div>
+
 <div class="container">
   <h2>🏆 Campeonato FF - Resultados por Queda</h2>
 
@@ -151,4 +162,15 @@
   <section style="text-align:center; margin-top: 2rem;">
     <button on:click={resetarCampeonato} style="background:#e67e22;">🔄 Resetar Tabela</button>
   </section>
+</div>
+
+<!-- Bloco de anúncio no RODAPÉ -->
+<div style="text-align:center; margin-top: 2rem;">
+  <ins class="adsbygoogle"
+       style="display:block"
+       data-ad-client="ca-pub-XXXXXXXXXXXXXXX"
+       data-ad-slot="0987654321"
+       data-ad-format="auto"
+       data-full-width-responsive="true"></ins>
+  <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
 </div>
