@@ -1,3 +1,4 @@
+import '../styles/style.css'
 import { writable, get } from 'svelte/store';
 
 export type Equipe = { nome: string };
