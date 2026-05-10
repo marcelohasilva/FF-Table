@@ -1,14 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  query,
-  setDoc,
-  where
-} from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, setDoc } from 'firebase/firestore';
 import type { ChampionshipData, Match, Result, ResultInput, Squad, SquadInput } from '$lib/types';
 import { calculateResultPoints } from '$lib/utils/scoring';
 import { slugify } from '$lib/utils/format';

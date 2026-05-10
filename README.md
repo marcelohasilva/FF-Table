@@ -66,7 +66,7 @@ Sem configurar Firebase, o sistema grava os dados em `data/championship.json`.
 
 ### Opção 1: rápido, com persistência local apenas para testes
 
-O projeto já está configurado com `@sveltejs/adapter-vercel`, então o deploy sobe normalmente no Vercel. Porém, a persistência em arquivo não é indicada em produção.
+O projeto usa `adapter-auto`, então o Vercel detecta a plataforma automaticamente no deploy. Porém, a persistência em arquivo deve ser usada só para testes.
 
 ### Opção 2: recomendado, com Firebase/Firestore
 
