@@ -1,111 +1,180 @@
 import '../styles/style.css'
-import { writable, get } from 'svelte/store';
+import { derived, writable, get } from 'svelte/store';
 
-export type Equipe = { nome: string };
-export type Resultado = { equipe: string; kills: number; colocacao: number; pontos: number; queda: number };
+import { initialTeams } from '../data/teams';
+import { calculateMatchPoints, calculateRanking } from '../logic/scoring';
+import type { MatchResult, RankingItem, Team } from '../logic/types';
 
-// Stores principais
-export const equipes = writable<Equipe[]>([]);
-export const resultados = writable<Resultado[]>([]);
+export type Resultado = {
+  teamId: string;
+  teamName: string;
+  kills: number;
+  position: number;
+  points: number;
+  drop: number;
+  booyah: boolean;
+};
 
-export const novaEquipe = writable('');
-export const totalQuedas = writable(0);
+export const teams = writable<Team[]>([...initialTeams]);
 
-export const equipeSelecionada = writable('');
-export const novasKills = writable(0);
-export const novaColocacao = writable(1);
-export const quedaSelecionada = writable(1);
+export const newTeamName = writable('');
+export const totalDrops = writable(6);
 
-// Funções utilitárias
+export const selectedTeamId = writable('');
+export const newKills = writable(0);
+export const newPosition = writable(1);
+export const selectedDrop = writable(1);
 
-export function calcularPontos(colocacao: number, kills: number): number {
-  const tabela = [12, 9, 8, 7, 6, 5, 4, 3, 2, 1];
-  const pontosColocacao = colocacao >= 1 && colocacao <= 10 ? tabela[colocacao - 1] : 0;
-  return pontosColocacao + kills;
-}
+export const results = derived(teams, ($teams) => mapTeamsToResults($teams));
 
-export function adicionarEquipe(nome: string) {
-  nome = nome.trim();
-  if (!nome) return;
-  if (get(equipes).some(e => e.nome.toLowerCase() === nome.toLowerCase())) {
-    alert("Equipe já cadastrada!");
+export function addTeam(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  if (get(teams).some((t) => t.name.toLowerCase() === trimmed.toLowerCase())) {
+    alert('Equipe ja cadastrada!');
     return;
   }
-  equipes.update(list => [...list, { nome }]);
+
+  const newTeam: Team = {
+    id: `t${Date.now()}`,
+    name: trimmed,
+    logo: trimmed.slice(0, 2).toUpperCase(),
+    matches: []
+  };
+
+  teams.update((list) => [...list, newTeam]);
 }
 
-export function removerEquipe(index: number) {
-  const nomeRemovido = get(equipes)[index].nome;
-  equipes.update(list => list.filter((_, i) => i !== index));
-  resultados.update(list => list.filter(r => r.equipe !== nomeRemovido));
-}
-
-export function adicionarResultado() {
-  const equipe = get(equipeSelecionada);
-  const quedas = get(totalQuedas);
-  const queda = get(quedaSelecionada);
-  const colocacao = get(novaColocacao);
-  const kills = get(novasKills);
-
-  if (!equipe) return alert("Selecione uma equipe");
-  if (quedas === 0) return alert("Defina o total de quedas antes de adicionar resultados.");
-  if (queda < 1 || queda > quedas) return alert("Selecione uma queda válida.");
-
-  if (get(resultados).some(r => r.queda === queda && r.equipe === equipe))
-    return alert(`Equipe "${equipe}" já tem resultado registrado na Queda ${queda}.`);
-
-  if (get(resultados).some(r => r.queda === queda && r.colocacao === colocacao))
-    return alert(`Colocação ${colocacao} já ocupada na Queda ${queda}.`);
-
-  resultados.update(list => [...list, {
-    equipe,
-    kills,
-    colocacao,
-    pontos: calcularPontos(colocacao, kills),
-    queda
-  }]);
-
-  equipeSelecionada.set('');
-  novasKills.set(0);
-  novaColocacao.set(1);
-  quedaSelecionada.set(1);
-}
-
-export function removerResultado(index: number) {
-  resultados.update(list => list.filter((_, i) => i !== index));
-}
-
-export function resetarCampeonato() {
-  if (!confirm("Tem certeza que deseja resetar o campeonato? Todos os dados serão apagados.")) return;
-  equipes.set([]);
-  resultados.set([]);
-  novaEquipe.set('');
-  equipeSelecionada.set('');
-  novasKills.set(0);
-  novaColocacao.set(1);
-  quedaSelecionada.set(1);
-  totalQuedas.set(0);
-}
-
-export function getRanking() {
-  const list = get(resultados);
-  const tabela = list.reduce((acc, r) => {
-    if (!acc[r.equipe]) acc[r.equipe] = { equipe: r.equipe, kills: 0, pontos: 0, quedas: 0 };
-    acc[r.equipe].kills += r.kills;
-    acc[r.equipe].pontos += r.pontos;
-    acc[r.equipe].quedas += 1;
-    return acc;
-  }, {} as Record<string, { equipe: string; kills: number; pontos: number; quedas: number }>);
-
-  return Object.values(tabela).sort((a, b) => b.pontos - a.pontos || b.kills - a.kills);
-}
-
-export function getResultadosPorQueda() {
-  const list = get(resultados);
-  const quedas = get(totalQuedas);
-  const resultadosPorQueda: Record<number, typeof list> = {};
-  for (let i = 1; i <= quedas; i++) {
-    resultadosPorQueda[i] = list.filter(r => r.queda === i).sort((a, b) => a.colocacao - b.colocacao);
+export function removeTeam(index: number) {
+  const teamId = get(teams)[index]?.id;
+  teams.update((list) => list.filter((_, i) => i !== index));
+  if (teamId && get(selectedTeamId) === teamId) {
+    selectedTeamId.set('');
   }
-  return resultadosPorQueda;
+}
+
+export function addMatchResults(resultsInput: Array<{ teamId: string; position: number; kills: number; drop?: number }>) {
+  const total = get(totalDrops);
+  if (total <= 0) return;
+
+  const nextDrop = resultsInput[0]?.drop ?? getNextDrop(get(teams), total);
+  if (nextDrop < 1 || nextDrop > total) return;
+
+  teams.update((list) =>
+    list.map((team) => {
+      const result = resultsInput.find((item) => item.teamId === team.id);
+      if (!result) return team;
+
+      const updatedMatches = [...team.matches];
+      updatedMatches[nextDrop - 1] = { position: result.position, kills: result.kills };
+
+      return { ...team, matches: updatedMatches };
+    })
+  );
+}
+
+export function addMatchFromForm() {
+  const teamId = get(selectedTeamId);
+  const drop = get(selectedDrop);
+  const total = get(totalDrops);
+  const position = get(newPosition);
+  const kills = get(newKills);
+
+  if (!teamId) return alert('Selecione uma equipe');
+  if (total === 0) return alert('Defina o total de quedas antes de adicionar resultados.');
+  if (drop < 1 || drop > total) return alert('Selecione uma queda valida.');
+
+  const currentResults = mapTeamsToResults(get(teams)).filter((r) => r.drop === drop);
+  if (currentResults.some((r) => r.teamId === teamId)) {
+    return alert(`Equipe ja tem resultado registrado na Queda ${drop}.`);
+  }
+  if (currentResults.some((r) => r.position === position)) {
+    return alert(`Colocacao ${position} ja ocupada na Queda ${drop}.`);
+  }
+
+  addMatchResults([{ teamId, position, kills, drop }]);
+
+  selectedTeamId.set('');
+  newKills.set(0);
+  newPosition.set(1);
+  selectedDrop.set(1);
+}
+
+export function removeMatch(teamId: string, drop: number) {
+  teams.update((list) =>
+    list.map((team) => {
+      if (team.id !== teamId) return team;
+      const updatedMatches = [...team.matches];
+      updatedMatches.splice(drop - 1, 1);
+      return { ...team, matches: updatedMatches };
+    })
+  );
+}
+
+export function resetTournament() {
+  if (!confirm('Tem certeza que deseja resetar o campeonato? Todos os dados serao apagados.')) return;
+  teams.set([]);
+  newTeamName.set('');
+  selectedTeamId.set('');
+  newKills.set(0);
+  newPosition.set(1);
+  selectedDrop.set(1);
+  totalDrops.set(0);
+}
+
+export function getRanking(): RankingItem[] {
+  return calculateRanking(get(teams));
+}
+
+export function getResultsByDrop() {
+  const list = mapTeamsToResults(get(teams));
+  const total = get(totalDrops);
+  const resultsByDrop: Record<number, typeof list> = {};
+  for (let i = 1; i <= total; i++) {
+    resultsByDrop[i] = list.filter((r) => r.drop === i).sort((a, b) => a.position - b.position);
+  }
+  return resultsByDrop;
+}
+
+export function simulateMatch() {
+  const list = get(teams);
+  const total = get(totalDrops);
+  if (list.length === 0 || total === 0) return;
+
+  const drop = getNextDrop(list, total);
+  if (drop > total) return;
+
+  const shuffled = [...list].sort(() => Math.random() - 0.5);
+  const resultsInput = shuffled.map((team, index) => ({
+    teamId: team.id,
+    position: index + 1,
+    kills: Math.floor(Math.random() * 9),
+    drop
+  }));
+
+  addMatchResults(resultsInput);
+}
+
+export function mapTeamsToResults(list: Team[]): Resultado[] {
+  return list.flatMap((team) =>
+    team.matches
+      .map((match, index) => ({
+        teamId: team.id,
+        teamName: team.name,
+        kills: match.kills,
+        position: match.position,
+        points: calculateMatchPoints(match),
+        drop: index + 1,
+        booyah: match.position === 1
+      }))
+      .filter((entry) => Number.isFinite(entry.position))
+  );
+}
+
+function getNextDrop(list: Team[], total: number) {
+  for (let i = 1; i <= total; i++) {
+    const filled = list.filter((team) => team.matches[i - 1]).length;
+    if (filled < list.length) return i;
+  }
+  return total + 1;
 }
